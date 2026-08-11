@@ -9,6 +9,6 @@ app.get("/health", (req, res) => {
     res.json({ status: "XYL" });
 });
 
-app.listen(4100, () => {
-    console.log("Server is running on port 4100");
+app.listen(4000, () => {
+    console.log("Server is running on port 4000");
 });
