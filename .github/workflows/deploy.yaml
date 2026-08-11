@@ -1,9 +1,7 @@
-name: Build and Push Docker Image
+name: Build and Deploy
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -11,11 +9,15 @@ env:
 
 jobs:
   build:
+    name: Build and Push
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       packages: write
+
+    outputs:
+      image: ${{ steps.image.outputs.image }}
 
     steps:
       - name: Checkout
@@ -28,13 +30,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image
+      - name: Build and push image
+        id: image
         run: |
-          docker build \
-            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            .
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
-      - name: Push Docker image
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to Production
+    needs: build
+
+    runs-on: [self-hosted, production]
+
+    steps:
+      - name: Deploy
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
         run: |
-          docker push \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          echo "Deploying $IMAGE"
+
+          docker pull "$IMAGE"
+
+          IMAGE="$IMAGE" docker compose \
+            -f ~/Documents/workspace/deployment/docker-compose.prod.yml \
+            up -d
+
+      - name: Check deployment
+        run: |
+          docker ps
+
+          echo "Checking application..."
+
+          curl --fail http://localhost:4000
