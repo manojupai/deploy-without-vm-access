@@ -1,0 +1,19 @@
+name: Test Self Hosted Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: [self-hosted, production]
+
+    steps:
+      - name: Check machine
+        run: |
+          echo "Running on:"
+          hostname
+
+      - name: Check Docker
+        run: |
+          docker --version
+          docker compose version
