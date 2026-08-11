@@ -1,0 +1,24 @@
+name: Test Deployment Machine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: [self-hosted, production]
+
+    steps:
+      - name: Check machine
+        run: |
+          hostname
+          whoami
+          pwd
+
+      - name: Check deployment directory
+        run: |
+          ls -la ~/Documents/workspace/deployment
+
+      - name: Check Docker
+        run: |
+          docker --version
+          docker compose version
