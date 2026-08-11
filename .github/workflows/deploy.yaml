@@ -62,8 +62,21 @@ jobs:
 
       - name: Check deployment
         run: |
+          echo "Waiting for application..."
+
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:4000 > /dev/null; then
+              echo "Application is healthy!"
+              exit 0
+            fi
+
+            echo "Application not ready yet... attempt $i/30"
+            sleep 2
+          done
+
+          echo "Application failed to become healthy"
+
           docker ps
+          docker logs deploy-without-vm-access
 
-          echo "Checking application..."
-
-          curl --fail http://localhost:4000
+          exit 1
