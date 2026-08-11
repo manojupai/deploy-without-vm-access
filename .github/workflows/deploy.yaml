@@ -53,7 +53,7 @@ jobs:
           docker pull "$IMAGE"
 
           IMAGE="$IMAGE" docker compose \
-            -f ~/deployment/docker-compose.prod.yml \
+            -f ~/Documents/workspace/deployment/docker-compose.prod.yml \
             up -d
 
       - name: Check deployment
