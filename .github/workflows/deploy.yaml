@@ -1,7 +1,9 @@
 name: Build and Deploy
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 env:
   REGISTRY: ghcr.io
@@ -44,39 +46,98 @@ jobs:
     runs-on: [self-hosted, production]
 
     steps:
-      - name: Deploy
+      - name: Deploy new version
+        id: deploy
         run: |
-          IMAGE="ghcr.io/manojupai/deploy-without-vm-access:${{ github.sha }}"
+          set -e
 
-          echo "Deploying $IMAGE"
+          NEW_IMAGE="ghcr.io/manojupai/deploy-without-vm-access:${{ github.sha }}"
+          STATE_FILE="$HOME/Documents/workspace/deployment/current.env"
+          COMPOSE_FILE="$HOME/Documents/workspace/deployment/docker-compose.prod.yml"
 
-          docker pull "$IMAGE"
+          echo "New image:"
+          echo "$NEW_IMAGE"
 
-          IMAGE="$IMAGE" docker compose \
-            -f ~/Documents/workspace/deployment/docker-compose.prod.yml \
+          # Save currently running image as previous version
+          if [ -f "$STATE_FILE" ]; then
+            CURRENT_IMAGE=$(grep '^IMAGE=' "$STATE_FILE" | cut -d '=' -f2- || true)
+          else
+            CURRENT_IMAGE=""
+          fi
+
+          echo "Current image: $CURRENT_IMAGE"
+
+          # Pull new image
+          docker pull "$NEW_IMAGE"
+
+          # Start new version
+          IMAGE="$NEW_IMAGE" docker compose \
+            -f "$COMPOSE_FILE" \
             up -d
 
-      - name: Check container logs
-        run: |
-          docker logs deploy-without-vm-access
-
-      - name: Check deployment
-        run: |
           echo "Waiting for application..."
 
+          # Health check - max 60 seconds
           for i in {1..30}; do
-            if curl --fail --silent http://localhost:4000 > /dev/null; then
+            if curl --fail --silent http://localhost:4000/health > /dev/null; then
               echo "Application is healthy!"
+
+              # Save successful version
+              echo "IMAGE=$NEW_IMAGE" > "$STATE_FILE"
+
+              echo "Deployment successful."
               exit 0
             fi
 
-            echo "Application not ready yet... attempt $i/30"
+            echo "Application not ready... attempt $i/30"
             sleep 2
           done
 
-          echo "Application failed to become healthy"
+          echo "Health check failed."
+          exit 1
 
-          docker ps
+      - name: Rollback
+        if: failure()
+        run: |
+          set -e
+
+          STATE_FILE="$HOME/Documents/workspace/deployment/current.env"
+          COMPOSE_FILE="$HOME/Documents/workspace/deployment/docker-compose.prod.yml"
+
+          if [ ! -f "$STATE_FILE" ]; then
+            echo "No previous deployment found. Cannot rollback."
+            exit 1
+          fi
+
+          PREVIOUS_IMAGE=$(grep '^IMAGE=' "$STATE_FILE" | cut -d '=' -f2-)
+
+          if [ -z "$PREVIOUS_IMAGE" ]; then
+            echo "Previous image is empty. Cannot rollback."
+            exit 1
+          fi
+
+          echo "Rolling back to:"
+          echo "$PREVIOUS_IMAGE"
+
+          docker pull "$PREVIOUS_IMAGE"
+
+          IMAGE="$PREVIOUS_IMAGE" docker compose \
+            -f "$COMPOSE_FILE" \
+            up -d
+
+          echo "Waiting for rollback health check..."
+
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:4000 > /dev/null; then
+              echo "Rollback successful!"
+              exit 0
+            fi
+
+            echo "Rollback application not ready... attempt $i/30"
+            sleep 2
+          done
+
+          echo "Rollback failed."
           docker logs deploy-without-vm-access
 
           exit 1
