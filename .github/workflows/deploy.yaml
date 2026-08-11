@@ -45,15 +45,15 @@ jobs:
 
     steps:
       - name: Deploy
-        env:
-          IMAGE: ${{ needs.build.outputs.image }}
         run: |
+          IMAGE="ghcr.io/manojupai/deploy-without-vm-access:${{ github.sha }}"
+
           echo "Deploying $IMAGE"
 
           docker pull "$IMAGE"
 
           IMAGE="$IMAGE" docker compose \
-            -f ~/Documents/workspace/deployment/docker-compose.prod.yml \
+            -f ~/deployment/docker-compose.prod.yml \
             up -d
 
       - name: Check deployment
