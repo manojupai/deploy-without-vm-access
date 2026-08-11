@@ -56,6 +56,10 @@ jobs:
             -f ~/Documents/workspace/deployment/docker-compose.prod.yml \
             up -d
 
+      - name: Check container logs
+        run: |
+          docker logs deploy-without-vm-access
+
       - name: Check deployment
         run: |
           docker ps
